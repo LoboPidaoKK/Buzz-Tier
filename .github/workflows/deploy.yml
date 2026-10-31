@@ -4,10 +4,15 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "BuzzTier.zip"
+      - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: buzztier-pages
@@ -15,11 +20,8 @@ concurrency:
 
 jobs:
   build:
-    name: Preparar site e gerar ZIP
+    name: Extrair BuzzTier.zip e preparar publicação
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: read
     steps:
       - name: Baixar arquivos do repositório
         uses: actions/checkout@v6
@@ -27,13 +29,38 @@ jobs:
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Montar site e compactar projeto
+      - name: Extrair ZIP e preparar site
+        shell: bash
         run: |
-          mkdir -p _site dist
-          touch .nojekyll
-          cp index.html icon.png manifest.webmanifest sw.js _site/
+          set -euo pipefail
+
+          if [ ! -f "BuzzTier.zip" ]; then
+            echo "::error::Não encontrei BuzzTier.zip na raiz do repositório."
+            exit 1
+          fi
+
+          unzip -t "BuzzTier.zip"
+          rm -rf extracted _site dist
+          mkdir -p extracted _site dist
+          unzip -q "BuzzTier.zip" -d extracted
+
+          INDEX_FILE="$(find extracted -type f -iname "index.html" -print -quit)"
+          if [ -z "$INDEX_FILE" ]; then
+            echo "::error::O arquivo index.html não foi encontrado dentro de BuzzTier.zip."
+            echo "Confira se o ZIP contém os arquivos do site."
+            exit 1
+          fi
+
+          SITE_DIR="${INDEX_FILE%/*}"
+          cp -a "$SITE_DIR"/. _site/
           touch _site/.nojekyll
-          zip -r dist/BuzzTier-v1.7.zip index.html icon.png icon-original.png manifest.webmanifest sw.js README.md LEIA-ME.txt .nojekyll .github/workflows/deploy.yml
+
+          if [ ! -f "_site/index.html" ]; then
+            echo "::error::A extração não deixou index.html na raiz de publicação."
+            exit 1
+          fi
+
+          cp "BuzzTier.zip" "dist/BuzzTier-v1.7.zip"
 
       - name: Enviar arquivos do site para publicação
         uses: actions/upload-pages-artifact@v4
@@ -52,9 +79,6 @@ jobs:
     name: Publicar no GitHub Pages
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
