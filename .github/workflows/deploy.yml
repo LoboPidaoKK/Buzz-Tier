@@ -1,4 +1,4 @@
-name: Gerar ZIP e publicar BuzzTier
+name: Gerar ZIP e publicar Buzz-Tier
 
 on:
   push:
