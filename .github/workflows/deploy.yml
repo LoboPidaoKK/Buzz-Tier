@@ -1,0 +1,64 @@
+name: Gerar ZIP e publicar BuzzTier
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: buzztier-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Preparar site e gerar ZIP
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - name: Baixar arquivos do repositório
+        uses: actions/checkout@v6
+
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Montar site e compactar projeto
+        run: |
+          mkdir -p _site dist
+          touch .nojekyll
+          cp index.html icon.png manifest.webmanifest sw.js _site/
+          touch _site/.nojekyll
+          zip -r dist/BuzzTier-v1.7.zip index.html icon.png icon-original.png manifest.webmanifest sw.js README.md LEIA-ME.txt .nojekyll .github/workflows/deploy.yml
+
+      - name: Enviar arquivos do site para publicação
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: Disponibilizar ZIP para download
+        uses: actions/upload-artifact@v4
+        with:
+          name: BuzzTier-v1.7-ZIP
+          path: dist/BuzzTier-v1.7.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  deploy:
+    name: Publicar no GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publicar site
+        id: deployment
+        uses: actions/deploy-pages@v4
